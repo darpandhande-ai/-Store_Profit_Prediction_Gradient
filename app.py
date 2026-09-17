@@ -5,7 +5,7 @@ from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
 
-# Load Model
+# Model loading logic with fallback dummy predictor for testing
 MODEL_PATH = "Gradient_model.pkl"
 model = None
 
@@ -13,433 +13,440 @@ if os.path.exists(MODEL_PATH):
     try:
         with open(MODEL_PATH, "rb") as f:
             model = pickle.load(f)
-        print("GradientBoostingRegressor model loaded successfully.")
+        print("Loaded GradientBoostingRegressor model successfully.")
     except Exception as e:
-        print(f"Error loading model: {e}")
+        print(f"Error loading model pickle: {e}")
 else:
-    print(f"Warning: {MODEL_PATH} not found. Running in fallback/simulation mode.")
+        print("Gradient_model.pkl not found. Running with simulated fallback model.")
 
-# Feature Definitions from Model Metadata
-FEATURE_NAMES = [
-    "Ship Mode", "Customer Name", "Segment", "Country", "City", 
-    "State", "Region", "Category", "Sub-Category", "Product Name", 
+# Feature names aligned with model pickle
+FEATURES = [
+    "Ship Mode", "Customer Name", "Segment", "Country", "City",
+    "State", "Region", "Category", "Sub-Category", "Product Name",
     "Sales", "Quantity", "Discount"
 ]
 
-DEFAULT_VALUES = {
-    "Ship Mode": 0, "Customer Name": 10, "Segment": 0, "Country": 0,
-    "City": 20, "State": 10, "Region": 1, "Category": 0,
-    "Sub-Category": 3, "Product Name": 100, "Sales": 250.00,
-    "Quantity": 3, "Discount": 0.10
-}
-
-# Embedded HTML Template
-HTML_TEMPLATE = """
+INDEX_HTML = """
 <!DOCTYPE html>
-<html lang="en" x-data="dashboard()" :class="theme">
+<html lang="en" data-theme="cyberpunk">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Store Profit Prediction - Analytics Dashboard</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['Fira Code', 'monospace'],
-                        display: ['Outfit', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Cap Round Institute Prediction</title>
     <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        [x-cloak] { display: none !important; }
-        
-        /* Themes */
-        .theme-cyber {
-            --bg-primary: #0f172a;
-            --bg-card: rgba(30, 41, 59, 0.7);
-            --border-color: rgba(99, 102, 241, 0.25);
-            --text-main: #f8fafc;
-            --card-gradient: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
-            --accent: #6366f1;
-        }
-        
-        .theme-sunset {
-            --bg-primary: #180914;
-            --bg-card: rgba(36, 15, 30, 0.7);
-            --border-color: rgba(244, 63, 94, 0.25);
-            --text-main: #fdf2f8;
-            --card-gradient: linear-gradient(135deg, rgba(88, 28, 135, 0.5) 0%, rgba(24, 9, 20, 0.8) 100%);
-            --accent: #f43f5e;
+        :root {
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-heading: 'Space Grotesk', sans-serif;
+            --transition-speed: 0.3s;
         }
 
-        .theme-emerald {
-            --bg-primary: #022c22;
-            --bg-card: rgba(6, 78, 59, 0.5);
-            --border-color: rgba(16, 185, 129, 0.25);
+        /* Color Themes */
+        [data-theme="cyberpunk"] {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #121824;
+            --card-bg: rgba(22, 30, 46, 0.85);
+            --accent-glow: #00f2fe;
+            --accent-2: #4facfe;
+            --accent-3: #ff0844;
+            --accent-4: #f77062;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: rgba(0, 242, 254, 0.2);
+            --gradient-1: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            --gradient-2: linear-gradient(135deg, #ff0844 0%, #f77062 100%);
+        }
+
+        [data-theme="emerald"] {
+            --bg-primary: #062c22;
+            --bg-secondary: #0a3a2f;
+            --card-bg: rgba(15, 59, 48, 0.85);
+            --accent-glow: #10b981;
+            --accent-2: #34d399;
+            --accent-3: #f59e0b;
+            --accent-4: #fbbf24;
             --text-main: #ecfdf5;
-            --card-gradient: linear-gradient(135deg, rgba(6, 95, 70, 0.5) 0%, rgba(2, 44, 34, 0.8) 100%);
-            --accent: #10b981;
+            --text-muted: #a7f3d0;
+            --border-color: rgba(16, 185, 129, 0.25);
+            --gradient-1: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --gradient-2: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        [data-theme="sunset"] {
+            --bg-primary: #1a0c1e;
+            --bg-secondary: #28122d;
+            --card-bg: rgba(48, 20, 55, 0.85);
+            --accent-glow: #ff007f;
+            --accent-2: #7928ca;
+            --accent-3: #ff0080;
+            --accent-4: #ff4d4d;
+            --text-main: #fff0f5;
+            --text-muted: #d8b4e2;
+            --border-color: rgba(255, 0, 127, 0.25);
+            --gradient-1: linear-gradient(135deg, #ff007f 0%, #7928ca 100%);
+            --gradient-2: linear-gradient(135deg, #ff4d4d 0%, #f9cb28 100%);
         }
 
         body {
             background-color: var(--bg-primary);
             color: var(--text-main);
-            transition: background-color 0.4s ease, color 0.4s ease;
+            font-family: var(--font-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background-color var(--transition-speed) ease;
         }
 
+        h1, h2, h3, h4, h5, .brand-font {
+            font-family: var(--font-heading);
+            letter-spacing: -0.5px;
+        }
+
+        /* Glassmorphism Cards */
         .glass-card {
-            background: var(--card-gradient);
+            background: var(--card-bg);
             backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
-            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.05); }
-        }
-        .animate-pulse-slow {
-            animation: pulse-slow 6s infinite ease-in-out;
+        .glass-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px 0 rgba(0, 242, 254, 0.15);
         }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
-        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+        /* Animated Header Glow */
+        .glow-title {
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            display: inline-block;
+        }
+
+        .glow-title::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--gradient-1);
+            filter: blur(25px);
+            opacity: 0.35;
+            z-index: -1;
+        }
+
+        /* Form Controls */
+        .form-label {
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .form-control, .form-select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main) !important;
+            border-radius: 12px;
+            padding: 0.65rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-glow);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .form-select option {
+            background-color: var(--bg-secondary);
+            color: var(--text-main);
+        }
+
+        /* Pulse Button */
+        .btn-predict {
+            background: var(--gradient-1);
+            border: none;
+            color: #fff;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0.9rem 2rem;
+            border-radius: 14px;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-predict:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.7);
+            color: #fff;
+        }
+
+        /* Result Animation Card */
+        .result-card {
+            display: none;
+            background: var(--gradient-2);
+            border-radius: 20px;
+            padding: 2rem;
+            color: #fff;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Theme Selector Buttons */
+        .theme-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .theme-btn:hover { transform: scale(1.2); }
+        .theme-cyberpunk { background: linear-gradient(45deg, #00f2fe, #4facfe); }
+        .theme-emerald { background: linear-gradient(45deg, #10b981, #34d399); }
+        .theme-sunset { background: linear-gradient(45deg, #ff007f, #7928ca); }
     </style>
 </head>
-<body class="font-sans antialiased min-h-screen relative overflow-x-hidden" :class="fontStyle">
+<body class="py-4">
 
-    <!-- Ambient Glowing Backgrounds -->
-    <div class="fixed -top-20 -left-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none animate-pulse-slow"></div>
-    <div class="fixed bottom-0 right-0 w-96 h-96 bg-rose-600/20 rounded-full blur-3xl pointer-events-none animate-pulse-slow" style="animation-delay: 3s;"></div>
-
-    <div class="container mx-auto px-4 py-8 relative z-10 max-w-7xl">
-        
-        <!-- Dashboard Header -->
-        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 glass-card p-6 rounded-2xl">
-            <div class="flex items-center gap-4">
-                <div class="p-3 bg-gradient-to-tr from-indigo-500 to-rose-500 rounded-xl shadow-lg">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-extrabold font-display bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
-                        AI Store Profit Prediction
-                    </h1>
-                    <p class="text-xs md:text-sm text-gray-400">Real-time Retail Analytics & Profitability Forecasting Engine</p>
-                </div>
+    <div class="container">
+        <!-- Top Navigation Bar -->
+        <header class="d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom border-secondary">
+            <div class="d-flex align-items-center gap-3">
+                <i class="fa-solid fa-graduation-cap fa-2x text-info"></i>
+                <h2 class="glow-title m-0">Cap Round Institute Prediction</h2>
             </div>
-
-            <!-- Controls: Currency, Themes & Fonts -->
-            <div class="flex flex-wrap items-center gap-3">
-                
-                <!-- Multi-Currency Selector -->
-                <select x-model="currency" class="bg-black/40 text-xs text-indigo-300 font-semibold border border-indigo-500/30 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 transition-all">
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
-                    <option value="INR">INR (₹)</option>
-                </select>
-
-                <!-- Themes Selector -->
-                <div class="flex items-center bg-black/40 p-1.5 rounded-xl border border-white/10">
-                    <button @click="setTheme('theme-cyber')" :class="{'bg-indigo-600 text-white': theme === 'theme-cyber', 'text-gray-400 hover:text-white': theme !== 'theme-cyber'}" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
-                        Cyber
-                    </button>
-                    <button @click="setTheme('theme-sunset')" :class="{'bg-rose-600 text-white': theme === 'theme-sunset', 'text-gray-400 hover:text-white': theme !== 'theme-sunset'}" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
-                        Sunset
-                    </button>
-                    <button @click="setTheme('theme-emerald')" :class="{'bg-emerald-600 text-white': theme === 'theme-emerald', 'text-gray-400 hover:text-white': theme !== 'theme-emerald'}" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
-                        Emerald
-                    </button>
-                </div>
-
-                <!-- Font Selector -->
-                <select x-model="fontStyle" class="bg-black/40 text-xs text-gray-200 border border-white/10 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 transition-all">
-                    <option value="font-sans">Inter (Sans)</option>
-                    <option value="font-display">Outfit (Display)</option>
-                    <option value="font-mono">Fira Code (Mono)</option>
-                </select>
+            
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small fw-bold">THEME:</span>
+                <div class="theme-btn theme-cyberpunk" onclick="setTheme('cyberpunk')" title="Cyberpunk Neon"></div>
+                <div class="theme-btn theme-emerald" onclick="setTheme('emerald')" title="Emerald Forest"></div>
+                <div class="theme-btn theme-sunset" onclick="setTheme('sunset')" title="Sunset Vibrant"></div>
             </div>
         </header>
 
         <!-- Main Dashboard Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            <!-- Left Side: Interactive Inputs -->
-            <div class="lg:col-span-5 flex flex-col gap-6">
-                <div class="glass-card rounded-2xl p-6">
-                    <div class="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
-                        <h2 class="text-lg font-bold flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping"></span>
-                            Store Parameters
-                        </h2>
-                        <button @click="resetDefaults()" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Reset</button>
-                    </div>
-
-                    <form @submit.prevent="runPrediction()" class="space-y-3.5 max-h-[580px] overflow-y-auto pr-2">
-                        <template x-for="(val, key) in formData" :key="key">
-                            <div class="flex flex-col gap-1 bg-black/20 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-all">
-                                <div class="flex justify-between items-center">
-                                    <label :for="key" class="text-xs font-medium text-gray-300" x-text="key === 'Sales' ? `Sales (${currencySymbols[currency]})` : key"></label>
-                                    <span class="text-xs font-mono text-indigo-400" x-text="key === 'Sales' ? formatCurrency(val) : val"></span>
-                                </div>
-                                <input 
-                                    type="number" 
-                                    :step="key === 'Discount' ? '0.01' : (key === 'Sales' ? '0.01' : '1')"
-                                    :id="key" 
-                                    x-model.number="formData[key]"
-                                    class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                                >
+        <div class="row g-4">
+            <!-- Left Panel: Input Parameters -->
+            <div class="col-lg-5">
+                <div class="glass-card p-4">
+                    <h4 class="mb-4 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-sliders text-info"></i> Model Parameters
+                    </h4>
+                    <form id="predictionForm" onsubmit="handlePredict(event)">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Ship Mode</label>
+                                <select class="form-select" name="Ship Mode">
+                                    <option>Standard Class</option>
+                                    <option>Second Class</option>
+                                    <option>First Class</option>
+                                    <option>Same Day</option>
+                                </select>
                             </div>
-                        </template>
+                            <div class="col-md-6">
+                                <label class="form-label">Segment</label>
+                                <select class="form-select" name="Segment">
+                                    <option>Consumer</option>
+                                    <option>Corporate</option>
+                                    <option>Home Office</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Category</label>
+                                <select class="form-select" name="Category">
+                                    <option>Technology</option>
+                                    <option>Furniture</option>
+                                    <option>Office Supplies</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Sub-Category</label>
+                                <select class="form-select" name="Sub-Category">
+                                    <option>Phones</option>
+                                    <option>Chairs</option>
+                                    <option>Storage</option>
+                                    <option>Tables</option>
+                                    <option>Binders</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Sales Value</label>
+                                <input type="number" step="0.01" class="form-control" name="Sales" value="250.00" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" class="form-control" name="Quantity" value="3" required>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Discount Rate (0 - 1)</label>
+                                <input type="number" step="0.01" min="0" max="1" class="form-control" name="Discount" value="0.10" required>
+                            </div>
+                        </div>
 
-                        <button 
-                            type="submit" 
-                            :disabled="loading"
-                            class="w-full mt-4 py-3.5 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            <svg x-show="loading" class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span x-text="loading ? 'Calculating Profit...' : 'Predict Store Profit'"></span>
+                        <!-- Hidden placeholder fields for model features -->
+                        <input type="hidden" name="Customer Name" value="Default Customer">
+                        <input type="hidden" name="Country" value="United States">
+                        <input type="hidden" name="City" value="New York">
+                        <input type="hidden" name="State" value="New York">
+                        <input type="hidden" name="Region" value="East">
+                        <input type="hidden" name="Product Name" value="Generic Item">
+
+                        <button type="submit" class="btn btn-predict w-100 mt-4">
+                            <i class="fa-solid fa-wand-magic-sparkles me-2"></i> Run Prediction
                         </button>
                     </form>
                 </div>
             </div>
 
-            <!-- Right Side: Visualization Analytics -->
-            <div class="lg:col-span-7 flex flex-col gap-6">
-                
-                <!-- Main Prediction Score KPI -->
-                <div class="glass-card rounded-2xl p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div>
-                        <span class="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Predicted Store Profit (<span x-text="currency"></span>)</span>
-                        <div class="text-4xl md:text-5xl font-black font-display tracking-tight text-white mt-1">
-                            <span x-text="prediction !== null ? formatCurrency(prediction) : '---'"></span>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-2">Predicted via Gradient Boosting Machine learning model</p>
-                    </div>
+            <!-- Right Panel: Analytics & Results -->
+            <div class="col-lg-7">
+                <!-- Result Banner -->
+                <div id="resultCard" class="result-card mb-4 text-center">
+                    <h5 class="text-uppercase tracking-wider opacity-75 m-0">Predicted Target Metric</h5>
+                    <h1 class="display-3 fw-bold my-2" id="predictionOutput">0.00</h1>
+                    <p class="m-0 small opacity-90"><i class="fa-solid fa-circle-check me-1"></i> Gradient Boosting Regressor Analysis Complete</p>
+                </div>
 
-                    <div class="flex gap-3">
-                        <div class="bg-black/30 border border-white/10 p-3 rounded-xl text-center min-w-[90px]">
-                            <span class="text-[10px] text-gray-400 block uppercase">Estimators</span>
-                            <span class="text-lg font-bold text-indigo-400">100</span>
+                <!-- Charts Layout -->
+                <div class="glass-card p-4">
+                    <h4 class="mb-3 d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-info"></i> Predictive Visual Analytics
+                    </h4>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div style="position: relative; height:230px;">
+                                <canvas id="radarChart"></canvas>
+                            </div>
                         </div>
-                        <div class="bg-black/30 border border-white/10 p-3 rounded-xl text-center min-w-[90px]">
-                            <span class="text-[10px] text-gray-400 block uppercase">Inputs</span>
-                            <span class="text-lg font-bold text-rose-400">13</span>
+                        <div class="col-md-6">
+                            <div style="position: relative; height:230px;">
+                                <canvas id="barChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Interactive Charts -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="glass-card rounded-2xl p-5 flex flex-col">
-                        <h3 class="text-sm font-bold text-gray-200 mb-4">Store Metrics Overview</h3>
-                        <div class="relative flex-1 min-h-[220px]">
-                            <canvas id="barChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="glass-card rounded-2xl p-5 flex flex-col">
-                        <h3 class="text-sm font-bold text-gray-200 mb-4">Profit Trend Projection</h3>
-                        <div class="relative flex-1 min-h-[220px]">
-                            <canvas id="lineChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Analysis Summary Table -->
-                <div class="glass-card rounded-2xl p-5">
-                    <h3 class="text-sm font-bold text-gray-200 mb-3">Profitability Parameters</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs text-gray-300">
-                            <thead class="bg-black/40 text-gray-400 uppercase font-mono">
-                                <tr>
-                                    <th class="p-2.5 rounded-l-lg">Metric</th>
-                                    <th class="p-2.5">Input Value</th>
-                                    <th class="p-2.5 rounded-r-lg">State</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <tr>
-                                    <td class="py-2 px-2.5 font-medium">Sales Volume</td>
-                                    <td class="py-2 px-2.5 font-mono text-indigo-400" x-text="formatCurrency(formData['Sales'])"></td>
-                                    <td class="py-2 px-2.5"><span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">Active</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="py-2 px-2.5 font-medium">Discount Rate</td>
-                                    <td class="py-2 px-2.5 font-mono text-rose-400" x-text="`${(formData['Discount'] * 100).toFixed(0)}%`"></td>
-                                    <td class="py-2 px-2.5"><span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px]">Applied</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="py-2 px-2.5 font-medium">Quantity Sold</td>
-                                    <td class="py-2 px-2.5 font-mono text-emerald-400" x-text="formData['Quantity']"></td>
-                                    <td class="py-2 px-2.5"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">Normal</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>
 
-    <!-- Alpine.js Application Logic -->
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('dashboard', () => ({
-                theme: 'theme-cyber',
-                fontStyle: 'font-sans',
-                currency: 'USD',
-                loading: false,
-                prediction: null,
-                formData: JSON.parse('{{ default_values | tojson | safe }}'),
-                barChart: null,
-                lineChart: null,
+        // Theme Switcher Logic
+        function setTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            updateChartColors();
+        }
 
-                currencyRates: {
-                    USD: 1.0,
-                    EUR: 0.92,
-                    GBP: 0.79,
-                    INR: 83.2
+        // Initialize Charts
+        let radarChart, barChart;
+
+        function initCharts() {
+            const ctxRadar = document.getElementById('radarChart').getContext('2d');
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+
+            radarChart = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: ['Sales Impact', 'Quantity', 'Discount Factor', 'Category Weight', 'Regional Index'],
+                    datasets: [{
+                        label: 'Feature Weight',
+                        data: [65, 59, 80, 81, 56],
+                        fill: true,
+                        backgroundColor: 'rgba(0, 242, 254, 0.2)',
+                        borderColor: '#00f2fe',
+                        pointBackgroundColor: '#ff0844',
+                    }]
                 },
-
-                currencySymbols: {
-                    USD: '$',
-                    EUR: '€',
-                    GBP: '£',
-                    INR: '₹'
-                },
-
-                init() {
-                    this.$nextTick(() => {
-                        this.initCharts();
-                        this.runPrediction();
-                    });
-                },
-
-                formatCurrency(value) {
-                    if (value === null || value === undefined) return '---';
-                    const converted = value * this.currencyRates[this.currency];
-                    return `${this.currencySymbols[this.currency]}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                },
-
-                setTheme(themeName) {
-                    this.theme = themeName;
-                },
-
-                resetDefaults() {
-                    this.formData = JSON.parse('{{ default_values | tojson | safe }}');
-                    this.runPrediction();
-                },
-
-                async runPrediction() {
-                    this.loading = true;
-                    try {
-                        const res = await fetch('/predict', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ features: this.formData })
-                        });
-                        const data = await res.json();
-                        if (data.status === 'success') {
-                            this.prediction = data.prediction;
-                            this.updateCharts();
-                        }
-                    } catch (err) {
-                        console.error('Error running prediction:', err);
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                initCharts() {
-                    const ctxBar = document.getElementById('barChart').getContext('2d');
-                    this.barChart = new Chart(ctxBar, {
-                        type: 'bar',
-                        data: {
-                            labels: ['Sales', 'Discount %', 'Quantity', 'Sub-Cat', 'Region'],
-                            datasets: [{
-                                data: [this.formData['Sales'], this.formData['Discount'] * 100, this.formData['Quantity'], this.formData['Sub-Category'], this.formData['Region']],
-                                backgroundColor: ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#a855f7'],
-                                borderRadius: 6
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
-                                x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
-                            }
-                        }
-                    });
-
-                    const ctxLine = document.getElementById('lineChart').getContext('2d');
-                    const steps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-                    this.lineChart = new Chart(ctxLine, {
-                        type: 'line',
-                        data: {
-                            labels: steps,
-                            datasets: [{
-                                data: steps.map(i => (this.prediction || 15) * (0.6 + (i * 0.004))),
-                                borderColor: '#ec4899',
-                                backgroundColor: 'rgba(236, 72, 153, 0.1)',
-                                fill: true,
-                                tension: 0.3
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
-                                x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
-                            }
-                        }
-                    });
-                },
-
-                updateCharts() {
-                    if (!this.barChart || !this.lineChart) return;
-                    
-                    this.barChart.data.datasets[0].data = [
-                        this.formData['Sales'], 
-                        this.formData['Discount'] * 100, 
-                        this.formData['Quantity'], 
-                        this.formData['Sub-Category'], 
-                        this.formData['Region']
-                    ];
-                    this.barChart.update();
-
-                    const steps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-                    this.lineChart.data.datasets[0].data = steps.map((i, idx) => (this.prediction || 10) * (0.5 + (idx * 0.05)));
-                    this.lineChart.update();
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#f1f5f9' } } },
+                    scales: { r: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { display: false } } }
                 }
-            }));
-        });
+            });
+
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Cap Round 1', 'Cap Round 2', 'Cap Round 3', 'Spot Round'],
+                    datasets: [{
+                        label: 'Estimated Cutoff Trend',
+                        data: [88, 82, 75, 69],
+                        backgroundColor: ['#00f2fe', '#4facfe', '#ff0844', '#f77062'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#f1f5f9' }, grid: { display: false } },
+                        y: { ticks: { color: '#f1f5f9' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    }
+                }
+            });
+        }
+
+        function updateChartColors() {
+            if (radarChart && barChart) {
+                radarChart.update();
+                barChart.update();
+            }
+        }
+
+        // Prediction Form Handling
+        async function handlePredict(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    const output = document.getElementById('predictionOutput');
+                    const card = document.getElementById('resultCard');
+                    
+                    card.style.display = 'block';
+                    output.innerText = result.prediction.toFixed(2);
+
+                    // Update Charts dynamically on prediction
+                    barChart.data.datasets[0].data = [
+                        result.prediction * 0.95,
+                        result.prediction * 0.88,
+                        result.prediction * 0.82,
+                        result.prediction * 0.75
+                    ];
+                    barChart.update();
+                }
+            } catch (err) {
+                console.error("Prediction Request Failed:", err);
+            }
+        }
+
+        window.onload = initCharts;
     </script>
 </body>
 </html>
@@ -447,32 +454,36 @@ HTML_TEMPLATE = """
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE, default_values=DEFAULT_VALUES)
+    return render_template_string(INDEX_HTML)
 
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        data = request.get_json()
-        input_dict = data.get("features", {})
-        
-        # Build vector matching feature order
-        input_vector = [float(input_dict.get(feat, 0)) for feat in FEATURE_NAMES]
-        
-        if model is not None:
-            prediction_val = model.predict([input_vector])[0]
-        else:
-            # Mathematical fallback computation when pickle is unweighted
-            prediction_val = float(np.dot(input_vector[:5], [0.1, 0.05, 0.2, 0.01, 0.15]))
+        # Extract features matching the model training structure
+        input_data = []
+        for feature in FEATURES:
+            val = request.form.get(feature, "0")
+            try:
+                input_data.append(float(val))
+            except ValueError:
+                # Basic string length fallback encoding for categorical values
+                input_data.append(float(len(str(val))))
 
-        return jsonify({
-            "status": "success",
-            "prediction": float(prediction_val)
-        })
+        features_array = np.array([input_data])
+
+        if model is not None:
+            prediction = float(model.predict(features_array)[0])
+        else:
+            # Fallback mock calculation if model pickle is missing/incompatible
+            sales = float(request.form.get("Sales", 100))
+            quantity = float(request.form.get("Quantity", 1))
+            discount = float(request.form.get("Discount", 0.1))
+            prediction = (sales * quantity) * (1.0 - discount)
+
+        return jsonify({"status": "success", "prediction": prediction})
+
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 400
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
